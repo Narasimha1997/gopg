@@ -32,7 +32,6 @@ Then, run the image using:
 ```
 docker run --rm -ti -p 9000:9000 gopg:latest 
 ```
-
 #### Example API usage
 The API `/executeJSON` can be used to execute go-programs. Let's create a simple json structure like the one shown below (example.json):
 
@@ -91,6 +90,32 @@ You can see the output exactly like the previous case:
    "error" : false,
    "errorString" : ""
 }
+```
+
+#### Using client-binary
+`./build.sh` builds both server and client binaries. The client binary executes go-programs by making request to the server. You can use the client binary as follows:
+
+```
+./bin/gopg-client ./examples/example.go
+```
+
+If everything worked as expected, it should produce the output as shown below:
+
+```
+Server Status:
+-------------------
+ Server successfully processed your file
+
+============================================================
+Program output:
+-------------------
+ Hello, world!!
+
+
+============================================================
+Compile + Execution time:
+------------------- 
+0.554610
 ```
 
 #### Contributing
