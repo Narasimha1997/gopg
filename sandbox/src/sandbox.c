@@ -63,6 +63,8 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
+    fprintf(stdout, "Executing binary inside the sandbox\n");
+
     //read the data as buffers and stream it to stdout
     while (true) {
         fread_bytes = fread(output_buffer, sizeof(uchar), sizeof(uchar) * OUTPUT_BUFFER, process_fd);

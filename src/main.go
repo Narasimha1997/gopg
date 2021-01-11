@@ -7,11 +7,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strings"
 )
-
-var env Env = Env{}
 
 func sendError(w *http.ResponseWriter, message string) {
 	data, _ := json.Marshal(MakeError(message))
@@ -153,8 +150,6 @@ func executeFile(w *http.ResponseWriter, r *http.Request, channel chan<- bool) {
 }
 
 func main() {
-
-	env.parseSettingsFile(os.Args[1])
 
 	pool := NewRouteHandler(100, 100)
 	pool.RegisterRoute("/executeJson", executeJSON)
