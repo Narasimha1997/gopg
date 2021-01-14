@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"runtime"
+	"time"
 )
 
 func main() {
@@ -17,4 +18,6 @@ func main() {
 	for _, file := range files {
 		fmt.Println(file.Name())
 	}
+
+	time.Sleep(2 * time.Second)
 }

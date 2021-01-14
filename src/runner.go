@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -20,7 +21,7 @@ const (
 	SandboxMemory int = (1 << 20) * 500
 
 	//SandboxTimeout timeout of the sandbox in seconds
-	SandboxTimeout = 20
+	SandboxTimeout = 10
 )
 
 //ProgramOutput Represents the output of the program
@@ -113,6 +114,7 @@ func (g *GoRunner) sandboxExecute(goFile string) (*ProgramOutput, error) {
 	if err != nil {
 		output, err := compiler.CombinedOutput()
 		outputString := string(output)
+		g.cleanUp(&goFileSource)
 		g.onResult(&outputString, &compileTime, err, false)
 	}
 
@@ -127,12 +129,15 @@ func (g *GoRunner) sandboxExecute(goFile string) (*ProgramOutput, error) {
 		"-i",
 		"sandbox:latest",
 	)
+	executor.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var outputBuffer strings.Builder
 
 	data, err := ioutil.ReadFile(goFile)
 	if err != nil {
 		outputString := "Failed to open binary file for reading"
+		g.cleanUp(&goFileSource)
+		g.cleanUp(&goFile)
 		return g.onResult(&outputString, &compileTime, err, false)
 	}
 
@@ -148,6 +153,8 @@ func (g *GoRunner) sandboxExecute(goFile string) (*ProgramOutput, error) {
 	if err != nil {
 		fmt.Println(err)
 		outputString := "Failed to run command"
+		g.cleanUp(&goFileSource)
+		g.cleanUp(&goFile)
 		return g.onResult(&outputString, &compileTime, err, false)
 	}
 
@@ -156,44 +163,83 @@ func (g *GoRunner) sandboxExecute(goFile string) (*ProgramOutput, error) {
 	if err != nil {
 		fmt.Println(err)
 		outputString := "Failed to run command"
+		g.cleanUp(&goFileSource)
+		g.cleanUp(&goFile)
 		return g.onResult(&outputString, &compileTime, err, false)
 	}
 
+	//We will use this function to clean the child process
+	childProcessCleaner := func(exitProcess bool) bool {
+
+		if exitProcess {
+			pgid, err := syscall.Getpgid(executor.Process.Pid)
+			if err != nil {
+				return false
+			}
+			syscall.Kill(-pgid, syscall.SIGTERM)
+		}
+
+		stdout.Close()
+		stderr.Close()
+		g.cleanUp(&goFileSource)
+		g.cleanUp(&goFile)
+
+		return true
+	}
+
+	executionEnd := make(chan error, 1)
+
+	processWaiter := func() {
+		err := executor.Wait()
+		executionEnd <- err
+	}
+
 	err = executor.Start()
+	go processWaiter()
 
 	stdin.Write(data)
 
 	//closes the stdin channel properly with EOF
 	stdin.Close()
+	executionStartTime := time.Now()
 
 	go io.Copy(&outputBuffer, stdout)
 	go io.Copy(&outputBuffer, stderr)
 
 	if err != nil {
+		executionEndTime := time.Now()
+		totalTime := executionEndTime.Sub(executionStartTime).Seconds() + compileTime
 		fmt.Println(err)
 		outputString := "Failed to execute the container, internal error"
-		return g.onResult(&outputString, &compileTime, err, false)
+		childProcessCleaner(false)
+		return g.onResult(&outputString, &totalTime, err, false)
 	}
 
-	//clean up the process
-	err = executor.Wait()
+	select {
+	case err := <-executionEnd:
+		if err != nil {
+			executionEndTime := time.Now()
+			totalTime := executionEndTime.Sub(executionStartTime).Seconds() + compileTime
+			outputMessage := "Wait error"
+			childProcessCleaner(false)
+			return g.onResult(&outputMessage, &totalTime, err, true)
+		}
 
-	if err != nil {
-		outputMessage := "Wait error"
-		return g.onResult(&outputMessage, &compileTime, err, false)
+		//executed gracefully
+		executionEndTime := time.Now()
+		totalTime := executionEndTime.Sub(executionStartTime).Seconds() + compileTime
+		childProcessCleaner(false)
+		result := outputBuffer.String()
+		return g.onResult(&result, &totalTime, nil, true)
+	case <-time.After(SandboxTimeout * time.Second):
+		executionEndTime := time.Now()
+		totalTime := executionEndTime.Sub(executionStartTime).Seconds() + compileTime
+		//timeout error
+		outputString := outputBuffer.String() + "\n[Execution Timeout]\n"
+		//terminate and exit
+		childProcessCleaner(true)
+		return g.onResult(&outputString, &totalTime, nil, false)
 	}
-
-	stdout.Close()
-	stdin.Close()
-
-	//clean-up the proces
-	g.cleanUp(&goFileSource)
-	g.cleanUp(&goFile)
-
-	result := outputBuffer.String()
-
-	return g.onResult(&result, &compileTime, nil, true)
-
 }
 
 func (g *GoRunner) cleanUp(fp *string) error {
