@@ -1,5 +1,5 @@
 ### gopg
-A minimal microservice written in Go that executes Go programs. This microservice can be used to set-up local go learning environment at your workspace/school. You can also use the provided zero-configuration docker-image for quick deployments.
+A minimal microservice written in Go that executes Go programs. This microservice can be used to set-up local go learning environment at your workspace/school. The tool comes with an optional secure sandbox powered by gVisor and Docker.
 
 #### Features:
 1. Zero-dependencies.
@@ -7,7 +7,7 @@ A minimal microservice written in Go that executes Go programs. This microservic
 3. A built-in work-queue that takes care of parallelizing execution work-loads.
 4. Auto-suspension of executions taking more than 10 seconds - avoids infinite looping.
 5. Easily deployable using docker image.
-6. Read-only file-system for execution instance (TODO)
+6. Secure sandbox which executes the programs in an isolated environment. 
 
 #### Local set-up
 To install this locally, clone the repository and build the binary by running:
@@ -22,16 +22,55 @@ Run the binary:
 
 This requires Go programming language to be installed and working correctly on the local machine.
 
-#### Docker set-up
-To build the docker image, you can run:
+
+### Using gopg
+There are two ways you can use `gopg`:
+
+Requirements:
+1. Golang 1.5+
+2. GCC compiler
+3. Docker installed and configured.
+4. `runsc` - gVisor runtime pluin for docker, you can install it by running `scripts/install_runsc.sh`
+
+#### 1. Local Setup
+To build and use gopg locally, go to `./scripts` and run:
 ```
-docker build . -t gopg:latest
+cd scripts/
+./build_sandbox.sh
+```
+Then you can run `gopg` as :
+```
+./bin/gopg
 ```
 
-Then, run the image using:
+#### 2. Docker-setup
+To run the entire environment inside a docker container, run the same command with `--docker` option.
 ```
-docker run --rm -ti -p 9000:9000 gopg:latest 
+cd scripts/
+./build_sandbox.sh --docker
 ```
+
+Then you can start the container as follows: (you need to pass docker socket file to the container)
+```
+docker run -ti -v /var/run/docker.sock:/var/run/docker.sock --net=host gopg
+```
+
+#### Enabling Sandboxed mode
+The sandbox mode can be enabled/disabled whenever required. (Note : Running without sandbox can execute the binary directly on your host kernel and has access to the host-file system which is not recommended). In some scenarios, you may need not have to worry about security, in such cases you can turn off the sandbox. If you need all the security features to be available, you can enable sandbox (Note : Sandboxed mode introduces more latency because the container needs to be created with gVisor runtime everytime you execute the program). 
+
+To enable sandbox, you can set `SANDBOX=1` environment variable, `gopg` sees this environment variable to decide whether to run sandbox or not. 
+
+Locally:
+```
+export SANDBOX=1
+./bin/gopg
+```
+
+Docker:
+```
+docker run -ti -v /var/run/docker.sock:/var/run/docker.sock --net=host --env="SANDBOX=1" gopg
+```
+
 #### Example API usage
 The API `/executeJSON` can be used to execute go-programs. Let's create a simple json structure like the one shown below (example.json):
 
@@ -93,7 +132,7 @@ You can see the output exactly like the previous case:
 ```
 
 #### Using client-binary
-`./build.sh` builds both server and client binaries. The client binary executes go-programs by making request to the server. You can use the client binary as follows:
+`./script/build_client.sh` builds client binary. The client binary executes go-programs by making request to the server. You can use the client binary as follows:
 
 ```
 ./bin/gopg-client ./examples/example.go

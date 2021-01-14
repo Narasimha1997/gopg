@@ -34,7 +34,6 @@ function build_backend () {
 pushd ../
 
     if [[ "$BUILD_SANDBOX" == "--docker" ]]; then
-        docker export $(docker create busybox) --output="busybox.tar"
         docker build . -t gopg:latest
 
         #sandbox
