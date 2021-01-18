@@ -9,20 +9,6 @@ A minimal microservice written in Go that executes Go programs. This microservic
 5. Easily deployable using docker image.
 6. Secure sandbox which executes the programs in an isolated environment. 
 
-#### Local set-up
-To install this locally, clone the repository and build the binary by running:
-```
-./build.sh
-```
-
-Run the binary:
-```
-./bin/gopg
-```
-
-This requires Go programming language to be installed and working correctly on the local machine.
-
-
 ### Using gopg
 There are two ways you can use `gopg`:
 
